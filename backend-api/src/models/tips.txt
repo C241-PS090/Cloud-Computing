@@ -1,0 +1,77 @@
+// tipsModel.js
+const { firestore, FieldValue } = require("../config/database");
+const { Storage } = require('@google-cloud/storage');
+const storage = new Storage();
+
+const uploadImage = async (imageFile) => {
+    const bucketName = 'your-bucket-name';
+    const filename = imageFile.name;
+    const bucket = storage.bucket(bucketName);
+    const file = bucket.file(filename);
+
+    await file.save(imageFile.buffer);
+
+    // Make the file public and get its URL
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
+
+    return publicUrl;
+};
+
+const createTip = async (title, content, imageFile) => {
+    const imageUrl = await uploadImage(imageFile);
+    const tipRecordRef = firestore.collection('tips').doc();
+    await tipRecordRef.set({
+        title: title,
+        content: content,
+        imageUrl: imageUrl,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const tipId = tipRecordRef.id;
+    const newTipRecord = await tipRecordRef.get();
+    
+    return {
+        id: tipId,
+        data: newTipRecord.data()
+    };
+};
+
+const getTipById = async (tipId) => {
+    const tipRecordRef = firestore.collection('tips').doc(tipId);
+    const tipRecord = await tipRecordRef.get();
+
+    if (!tipRecord.exists) {
+        throw new Error('Tip not found');
+    }
+
+    return {
+        id: tipRecord.id,
+        data: tipRecord.data()
+    };
+};
+
+const updateTip = async (tipId, title, content, imageFile) => {
+    const imageUrl = await uploadImage(imageFile);
+    const tipRecordRef = firestore.collection('tips').doc(tipId);
+    await tipRecordRef.update({
+        title: title,
+        content: content,
+        imageUrl: imageUrl,
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const updatedTipRecord = await tipRecordRef.get();
+    return {
+        id: updatedTipRecord.id,
+        data: updatedTipRecord.data()
+    };
+};
+
+const deleteTip = async (tipId) => {
+    const tipRecordRef = firestore.collection('tips').doc(tipId);
+    await tipRecordRef.delete();
+};
+
+module.exports = { createTip, getTipById, updateTip, deleteTip };
